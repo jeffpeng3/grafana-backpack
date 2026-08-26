@@ -1,5 +1,4 @@
 .env
 __pycache__/
 *.pyc
-gist_id.txt
 .venv/

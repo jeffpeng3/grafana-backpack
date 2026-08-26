@@ -105,8 +105,6 @@ def run_backup():
             return
         files = build_files(session, dashboards)
         gist = upload_gist(session, files)
-    with open("gist_id.txt", "w", encoding="utf-8") as f:
-        f.write(gist["id"])
     log.info(f"備份完成，Gist: {gist['html_url']}")
 
 
@@ -125,12 +123,6 @@ def extract_gist_id(value):
 GITHUB_GIST_ID = extract_gist_id(GITHUB_GIST_URL)
 if not GITHUB_GIST_ID:
     GITHUB_GIST_ID = extract_gist_id(os.environ.get("GITHUB_GIST_ID", ""))
-if not GITHUB_GIST_ID:
-    try:
-        with open("gist_id.txt", "r", encoding="utf-8") as f:
-            GITHUB_GIST_ID = f.read().strip()
-    except FileNotFoundError:
-        GITHUB_GIST_ID = ""
 
 
 def main():
