@@ -76,6 +76,16 @@ def build_files(session, dashboards):
     return files
 
 
+def get_gist_files(session, gist_id):
+    resp = session.get(
+        f"https://api.github.com/gists/{gist_id}",
+        headers=github_headers(),
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return {name: {"content": f["content"]} for name, f in resp.json()["files"].items()}
+
+
 def upload_gist(session, files):
     description = f"Grafana dashboard backup {datetime.now(ZoneInfo(TZ)).strftime('%Y-%m-%d %H:%M')}"
     payload = {"description": description, "public": False, "files": files}
@@ -104,6 +114,11 @@ def run_backup():
             log.warning("沒有找到任何 dashboard")
             return
         files = build_files(session, dashboards)
+        if GITHUB_GIST_ID:
+            current = get_gist_files(session, GITHUB_GIST_ID)
+            if current == files:
+                log.info("無變更，跳過更新（不產生 revision）")
+                return
         gist = upload_gist(session, files)
     log.info(f"備份完成，Gist: {gist['html_url']}")
 
