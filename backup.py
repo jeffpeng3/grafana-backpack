@@ -78,6 +78,7 @@ def build_files(session, dashboards):
 
 def upload_gist(session, files):
     description = f"Grafana dashboard backup {datetime.now(ZoneInfo(TZ)).strftime('%Y-%m-%d %H:%M')}"
+    payload = {"description": description, "public": False, "files": files}
     if GITHUB_GIST_ID:
         url = f"https://api.github.com/gists/{GITHUB_GIST_ID}"
         method = session.patch
@@ -87,7 +88,7 @@ def upload_gist(session, files):
     resp = method(
         url,
         headers=github_headers(),
-        json={"description": description, "public": False, "files": files},
+        json=payload,
         timeout=60,
     )
     resp.raise_for_status()
