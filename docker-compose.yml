@@ -3,5 +3,11 @@ services:
     build: .
     container_name: grafana-backpack
     restart: unless-stopped
-    env_file:
-      - .env
+    environment:
+      GRAFANA_URL: ${GRAFANA_URL}
+      GRAFANA_API_TOKEN: ${GRAFANA_API_TOKEN}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_GIST_URL: ${GITHUB_GIST_URL}
+      GITHUB_GIST_ID: ${GITHUB_GIST_ID}
+      TZ: ${TZ}
+      BACKUP_HOUR: ${BACKUP_HOUR}
