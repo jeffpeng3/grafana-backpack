@@ -22,7 +22,7 @@ log = logging.getLogger("backup")
 
 
 def grafana_headers():
-    return {"Authorization": f"Token {GRAFANA_API_TOKEN}"}
+    return {"Authorization": f"Bearer {GRAFANA_API_TOKEN}"}
 
 
 def github_headers():
@@ -36,21 +36,21 @@ def github_headers():
 
 def fetch_dashboards(session):
     dashboards = []
-    page = 1
+    offset = 0
+    limit = 1000
     while True:
         resp = session.get(
-            f"{GRAFANA_URL}/api/dashboards/search",
+            f"{GRAFANA_URL}/api/search",
             headers=grafana_headers(),
-            params={"perPage": 1000, "page": page},
+            params={"limit": limit, "offset": offset},
             timeout=30,
         )
         resp.raise_for_status()
-        data = resp.json()
-        dashboards.extend(data.get("dashboards", []))
-        next_page = data.get("nextPage", 0)
-        if not next_page:
+        page = resp.json()
+        dashboards.extend(d for d in page if d.get("type") == "dash-db")
+        if len(page) < limit:
             break
-        page = next_page
+        offset += limit
     return dashboards
 
 
