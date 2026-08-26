@@ -1,0 +1,7 @@
+services:
+  grafana-backpack:
+    build: .
+    container_name: grafana-backpack
+    restart: unless-stopped
+    env_file:
+      - .env

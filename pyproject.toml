@@ -1,0 +1,8 @@
+[project]
+name = "grafana-backpack"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "apscheduler>=3.11.3",
+    "requests>=2.34.2",
+]

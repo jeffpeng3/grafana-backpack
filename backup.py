@@ -1,0 +1,137 @@
+import json
+import logging
+import os
+import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+import requests
+from apscheduler.schedulers.background import BackgroundScheduler
+
+GRAFANA_URL = os.environ.get("GRAFANA_URL", "").rstrip("/")
+GRAFANA_API_TOKEN = os.environ.get("GRAFANA_API_TOKEN", "")
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+TZ = os.environ.get("TZ", "Asia/Taipei")
+HOUR = int(os.environ.get("BACKUP_HOUR", "9"))
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+log = logging.getLogger("backup")
+
+
+def grafana_headers():
+    return {"Authorization": f"Token {GRAFANA_API_TOKEN}"}
+
+
+def github_headers():
+    return {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "grafana-backpack",
+    }
+
+
+def fetch_dashboards(session):
+    dashboards = []
+    page = 1
+    while True:
+        resp = session.get(
+            f"{GRAFANA_URL}/api/dashboards/search",
+            headers=grafana_headers(),
+            params={"perPage": 1000, "page": page},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        dashboards.extend(data.get("dashboards", []))
+        next_page = data.get("nextPage", 0)
+        if not next_page:
+            break
+        page = next_page
+    return dashboards
+
+
+def fetch_dashboard_full(session, uid):
+    resp = session.get(
+        f"{GRAFANA_URL}/api/dashboards/uid/{uid}",
+        headers=grafana_headers(),
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()["dashboard"]
+
+
+def build_files(session, dashboards):
+    files = {}
+    for d in dashboards:
+        uid = d.get("uid")
+        title = d.get("title", uid)
+        slug = "".join(c if (c.isalnum() or c in "-_") else "-" for c in title).strip("-")
+        full = fetch_dashboard_full(session, uid)
+        files[f"{slug}.json"] = {"content": json.dumps(full, indent=2, ensure_ascii=False)}
+    return files
+
+
+def upload_gist(session, files):
+    description = f"Grafana dashboard backup {datetime.now(ZoneInfo(TZ)).strftime('%Y-%m-%d %H:%M')}"
+    if GITHUB_GIST_ID:
+        url = f"https://api.github.com/gists/{GITHUB_GIST_ID}"
+        method = session.patch
+    else:
+        url = "https://api.github.com/gists"
+        method = session.post
+    resp = method(
+        url,
+        headers=github_headers(),
+        json={"description": description, "public": False, "files": files},
+        timeout=60,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def run_backup():
+    log.info("開始備份 Grafana dashboards")
+    with requests.Session() as session:
+        dashboards = fetch_dashboards(session)
+        log.info(f"取得 {len(dashboards)} 個 dashboard")
+        if not dashboards:
+            log.warning("沒有找到任何 dashboard")
+            return
+        files = build_files(session, dashboards)
+        gist = upload_gist(session, files)
+    with open("gist_id.txt", "w", encoding="utf-8") as f:
+        f.write(gist["id"])
+    log.info(f"備份完成，Gist: {gist['html_url']}")
+
+
+GITHUB_GIST_ID = os.environ.get("GITHUB_GIST_ID", "")
+if not GITHUB_GIST_ID:
+    try:
+        with open("gist_id.txt", "r", encoding="utf-8") as f:
+            GITHUB_GIST_ID = f.read().strip()
+    except FileNotFoundError:
+        GITHUB_GIST_ID = ""
+
+
+def main():
+    scheduler = BackgroundScheduler(timezone=TZ)
+    scheduler.add_job(run_backup, "cron", hour=HOUR, misfire_grace_time=86400)
+    scheduler.start()
+    log.info(f"排程已啟動，每天 {HOUR:02d}:00 ({TZ}) 備份")
+    if GITHUB_GIST_ID:
+        log.info("使用既有的 Gist")
+    else:
+        log.info("尚未有 Gist，首次執行會建立新的")
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        scheduler.shutdown()
+
+
+if __name__ == "__main__":
+    main()
