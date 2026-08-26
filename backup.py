@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -108,7 +109,21 @@ def run_backup():
     log.info(f"備份完成，Gist: {gist['html_url']}")
 
 
-GITHUB_GIST_ID = os.environ.get("GITHUB_GIST_ID", "")
+GITHUB_GIST_URL = os.environ.get("GITHUB_GIST_URL", "")
+
+
+def extract_gist_id(value):
+    if not value:
+        return ""
+    match = re.search(r"([0-9a-f]{32})", value)
+    if match:
+        return match.group(1)
+    return ""
+
+
+GITHUB_GIST_ID = extract_gist_id(GITHUB_GIST_URL)
+if not GITHUB_GIST_ID:
+    GITHUB_GIST_ID = extract_gist_id(os.environ.get("GITHUB_GIST_ID", ""))
 if not GITHUB_GIST_ID:
     try:
         with open("gist_id.txt", "r", encoding="utf-8") as f:
